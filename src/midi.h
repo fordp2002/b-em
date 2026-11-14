@@ -1,6 +1,8 @@
 #ifndef MIDI_INC_H
 #define MIDI_INC_H
 
+#define MIDI_NUM_OUTPUTS 3
+
 typedef struct _midi_dev midi_dev_t;
 
 extern void midi_init(void);

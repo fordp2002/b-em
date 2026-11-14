@@ -11,14 +11,22 @@ static const char *szMusic4000InDevName;
 static HMIDIIN hMusic4000MidiIn;
 
 struct _midi_dev {
-    const char *szDesc;
     const char *szName;
     HMIDIOUT hMidiOut;
 };
 
-midi_dev_t Music2000Out1 = { .szDesc = "Music 2000 Out 1" };
-midi_dev_t Music2000Out2 = { .szDesc = "Music 2000 Out 2" };
-midi_dev_t Music2000Out3 = { .szDesc = "Music 2000 Out 3" };
+midi_dev_t Music2000Out[MIDI_NUM_OUTPUTS];
+
+static inline int MidiOutNum(midi_dev_t *dev) {
+    return (int)(dev - Music2000Out) + 1;
+}
+
+static bool MidiOutNameInUse(const char *szName) {
+    for (int j = 0; j < MIDI_NUM_OUTPUTS; j++)
+        if (Music2000Out[j].szName && strcmp(szName, Music2000Out[j].szName) == 0)
+            return true;
+    return false;
+}
 
 void CALLBACK MidiInProc(HMIDIIN hMidiIn, UINT wMsg, DWORD dwInstance, DWORD dwParam1, DWORD dwParam2) {
 
@@ -71,57 +79,44 @@ static void MidiOpenOutInternal(UINT nMidiDevice, midi_dev_t *dev) {
     MMRESULT rv;
 
     if ((rv = midiOutOpen(&dev->hMidiOut, nMidiDevice, 0, 0, CALLBACK_NULL)) == MMSYSERR_NOERROR)
-        log_info("midi-windows: opened MIDI out device #%d, %s for %s", nMidiDevice, dev->szName, dev->szDesc);
+        log_info("midi-windows: opened MIDI out device #%d, %s for Music 2000 Out %d", nMidiDevice, dev->szName, MidiOutNum(dev));
     else
-        log_warn("midi-windows: unable to open MIDI device #%d, %s for %s, rv=%d", nMidiDevice, dev->szName, dev->szDesc, rv);
+        log_warn("midi-windows: unable to open MIDI device #%d, %s for Music 2000 Out %d, rv=%d", nMidiDevice, dev->szName, MidiOutNum(dev), rv);
 }
 
 static void MidiOpenM2000Devs(void) {
     UINT nMidiDevices, i;
     MIDIOUTCAPS caps;
+    int j;
 
     if ((nMidiDevices = midiOutGetNumDevs()) > 0) {
         log_debug("midi-windows: found %d midi out devices", nMidiDevices);
-        if (Music2000Out1.szName || Music2000Out2.szName || Music2000Out3.szName) {
-            for (i = 0; i < nMidiDevices; i++) {
-                midiOutGetDevCaps(i, &caps, sizeof(MIDIOUTCAPS));
-                log_debug("midi-windows: device #%d has name %s", i, caps.szPname);
-                if (Music2000Out1.szName && !Music2000Out1.hMidiOut && strcmp(caps.szPname, Music2000Out1.szName) == 0) {
-                    MidiOpenOutInternal(i, &Music2000Out1);
-                    log_debug("midi-windows: assigned #%d to out1 on name", i);
-                }
-                else if (Music2000Out2.szName && !Music2000Out2.hMidiOut && strcmp(caps.szPname, Music2000Out2.szName) == 0) {
-                    MidiOpenOutInternal(i, &Music2000Out2);
-                    log_debug("midi-windows: assigned #%d to out2 on name", i);
-                }
-                else if (Music2000Out3.szName && !Music2000Out3.hMidiOut && strcmp(caps.szPname, Music2000Out3.szName) == 0) {
-                    MidiOpenOutInternal(i, &Music2000Out3);
-                    log_debug("midi-windows: assigned #%d to out3 on name", i);
+
+        // First pass: open the devices named in the config.
+        for (i = 0; i < nMidiDevices; i++) {
+            midiOutGetDevCaps(i, &caps, sizeof(MIDIOUTCAPS));
+            log_debug("midi-windows: device #%d has name %s", i, caps.szPname);
+            for (j = 0; j < MIDI_NUM_OUTPUTS; j++) {
+                midi_dev_t *dev = &Music2000Out[j];
+                if (music2000_enabled(j) && dev->szName && !dev->hMidiOut && strcmp(caps.szPname, dev->szName) == 0) {
+                    MidiOpenOutInternal(i, dev);
+                    log_debug("midi-windows: assigned #%d to out%d on name", i, j + 1);
+                    break;
                 }
             }
         }
-        if (!Music2000Out1.hMidiOut || !Music2000Out2.hMidiOut || !Music2000Out3.hMidiOut) {
-            for (i = 0; i < nMidiDevices; i++) {
-                midiOutGetDevCaps(i, &caps, sizeof(MIDIOUTCAPS));
-                if (!(Music2000Out1.szName && strcmp(caps.szPname, Music2000Out1.szName) == 0) &&
-                    !(Music2000Out2.szName && strcmp(caps.szPname, Music2000Out2.szName) == 0) &&
-                    !(Music2000Out3.szName && strcmp(caps.szPname, Music2000Out3.szName) == 0))
-                {
-                    if (!Music2000Out1.hMidiOut) {
-                        Music2000Out1.szName = strdup(caps.szPname);
-                        MidiOpenOutInternal(i, &Music2000Out1);
-                        log_debug("midi-windows: assigned #%d to out1 by number", i);
-                    } else if (!Music2000Out2.hMidiOut) {
-                        Music2000Out2.szName = strdup(caps.szPname);
-                        MidiOpenOutInternal(i, &Music2000Out2);
-                        log_debug("midi-windows: assigned #%d to out2 by number", i);
-                    } else if (!Music2000Out3.hMidiOut) {
-                        Music2000Out3.szName = strdup(caps.szPname);
-                        log_debug("midi-windows: assigned #%d to out3 by number", i);
-                        MidiOpenOutInternal(i, &Music2000Out3);
-                    } else
-                        break;
-                }
+
+        // Second pass: give any enabled outputs still unopened the remaining devices in order.
+        for (i = 0; i < nMidiDevices; i++) {
+            midiOutGetDevCaps(i, &caps, sizeof(MIDIOUTCAPS));
+            if (!MidiOutNameInUse(caps.szPname)) {
+                for (j = 0; j < MIDI_NUM_OUTPUTS && (Music2000Out[j].hMidiOut || !music2000_enabled(j)); j++)
+                    ;
+                if (j == MIDI_NUM_OUTPUTS)
+                    break;
+                Music2000Out[j].szName = strdup(caps.szPname);
+                MidiOpenOutInternal(i, &Music2000Out[j]);
+                log_debug("midi-windows: assigned #%d to out%d by number", i, j + 1);
             }
         }
     } else
@@ -131,49 +126,49 @@ static void MidiOpenM2000Devs(void) {
 void midi_init(void) {
     MidiOpenM400Dev();
     MidiOpenM2000Devs();
-    music2000_init(&Music2000Out1, &Music2000Out2, &Music2000Out3);
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++)
+        music2000_set_output(i, &Music2000Out[i]);
 }
 
 void midi_close(void) {
     if (hMusic4000MidiIn != NULL)
         midiInClose(hMusic4000MidiIn);
-    if (Music2000Out1.hMidiOut != NULL)
-        midiOutClose(Music2000Out1.hMidiOut);
-    if (Music2000Out2.hMidiOut != NULL)
-        midiOutClose(Music2000Out2.hMidiOut);
-    if (Music2000Out3.hMidiOut != NULL)
-        midiOutClose(Music2000Out3.hMidiOut);
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++)
+        if (Music2000Out[i].hMidiOut != NULL)
+            midiOutClose(Music2000Out[i].hMidiOut);
 }
 
 void midi_load_config(void) {
     const char *ptr;
+    char key[32];
 
     if ((ptr = get_config_string("midi", "music4000_in_device",   NULL)))
         szMusic4000InDevName = strdup(ptr);
-    if ((ptr = get_config_string("midi", "music2000_out1_device", NULL)))
-        Music2000Out1.szName = strdup(ptr);
-    if ((ptr = get_config_string("midi", "music2000_out2_device", NULL)))
-        Music2000Out2.szName = strdup(ptr);
-    if ((ptr = get_config_string("midi", "music2000_out3_device", NULL)))
-        Music2000Out3.szName = strdup(ptr);
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
+        snprintf(key, sizeof key, "music2000_out%d_device", i + 1);
+        if ((ptr = get_config_string("midi", key, NULL)))
+            Music2000Out[i].szName = strdup(ptr);
+    }
 };
 
 void midi_save_config(void) {
+    char key[32];
+
     if (szMusic4000InDevName)
         set_config_string("midi", "music4000_in_device", szMusic4000InDevName);
-    if (Music2000Out1.szName)
-        set_config_string("midi", "music2000_out1_device", Music2000Out1.szName);
-    if (Music2000Out2.szName)
-        set_config_string("midi", "music2000_out2_device", Music2000Out2.szName);
-    if (Music2000Out3.szName)
-        set_config_string("midi", "music2000_out3_device", Music2000Out3.szName);
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
+        if (Music2000Out[i].szName) {
+            snprintf(key, sizeof key, "music2000_out%d_device", i + 1);
+            set_config_string("midi", key, Music2000Out[i].szName);
+        }
+    }
 }
 
 void midi_send_msg(midi_dev_t *dev, uint8_t *msg, size_t size) {
     DWORD value = msg[0] | (msg[1] << 8) | (msg[2] << 16);
     MMRESULT res;
 
-    log_debug("midi-windows: midi_send_msg(%s, %.*s, %d)", dev->szDesc, (int)size, msg, (int)size);
+    log_debug("midi-windows: midi_send_msg(Music 2000 Out %d, %.*s, %d)", MidiOutNum(dev), (int)size, msg, (int)size);
     if ((res = midiOutShortMsg(dev->hMidiOut, value)) != MMSYSERR_NOERROR)
         log_error("midi-windows: unable to send MIDI event on %s: %d", dev->szName, res);
 }

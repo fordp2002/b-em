@@ -13,9 +13,7 @@
 #endif
 
 midi_dev_t midi_music4000;
-midi_dev_t midi_music2000_out1;
-midi_dev_t midi_music2000_out2;
-midi_dev_t midi_music2000_out3;
+midi_dev_t midi_music2000_out[MIDI_NUM_OUTPUTS];
 
 #ifdef HAVE_JACK_JACK_H
 
@@ -30,7 +28,7 @@ static void midi_jack_m4000_proc(jack_nframes_t nframes) {
     jack_midi_data_t *md;
     int i, midi_status;
 
-    if (midi_music4000.jack_enabled) {
+    if (midi_music4000.jack_port) {
         port_buf = jack_port_get_buffer(midi_music4000.jack_port, nframes);
         for (i = 0; jack_midi_event_get(&ev, port_buf, i) == 0; i++) {
             md = ev.buffer;
@@ -54,7 +52,7 @@ static void midi_jack_m2000_proc(midi_dev_t *midi, jack_nframes_t nframes, jack_
     size_t bytes;
     jack_midi_data_t md[4], *dest;
 
-    if (midi->jack_enabled || midi->jack_port) {
+    if (midi->jack_port) {
         port_buf = jack_port_get_buffer(midi->jack_port, nframes);
         jack_midi_clear_buffer(port_buf);
         while ((bytes = jack_ringbuffer_read(midi->ring_buf, (char *)md, sizeof md)) > 0) {
@@ -73,14 +71,13 @@ static int midi_jack_process(jack_nframes_t nframes, void *arg) {
 
     midi_jack_m4000_proc(nframes);
     frame_time = 0;
-    midi_jack_m2000_proc(&midi_music2000_out1, nframes, &frame_time);
-    midi_jack_m2000_proc(&midi_music2000_out2, nframes, &frame_time);
-    midi_jack_m2000_proc(&midi_music2000_out3, nframes, &frame_time);
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++)
+        midi_jack_m2000_proc(&midi_music2000_out[i], nframes, &frame_time);
     return 0;
 }
 
 static inline void m4000_jack_init(void) {
-    if (midi_music4000.jack_enabled) {
+    if (sound_music5000 && midi_music4000.jack_enabled) {
         if ((midi_music4000.jack_port = jack_port_register(jack_client, "midi-in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput|JackPortIsTerminal, 0)))
             log_debug("midi-linux: M4000 jack midi port open");
         else
@@ -88,8 +85,12 @@ static inline void m4000_jack_init(void) {
     }
 }
 
-static inline void m2000_jack_init(midi_dev_t *midi, const char *pname) {
-    if (midi->jack_enabled) {
+static inline void m2000_jack_init(int i) {
+    midi_dev_t *midi = &midi_music2000_out[i];
+    char pname[16];
+
+    if (music2000_enabled(i) && midi->jack_enabled) {
+        snprintf(pname, sizeof pname, "midi-out%d", i + 1);
         if ((midi->jack_port = jack_port_register(jack_client, pname, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0))) {
             log_debug("midi-linux: M2000 jack midi port %s open", pname);
             if (!(midi->ring_buf = jack_ringbuffer_create(JACK_RINGBUF_SIZE))) {
@@ -103,19 +104,25 @@ static inline void m2000_jack_init(midi_dev_t *midi, const char *pname) {
     }
 }
 
+static bool m2000_any_jack_enabled(void) {
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++)
+        if (music2000_enabled(i) && midi_music2000_out[i].jack_enabled)
+            return true;
+    return false;
+}
+
 static inline void midi_jack_init(void) {
     jack_status_t status;
     int err;
 
-    if (midi_music4000.jack_enabled || midi_music2000_out1.jack_enabled || midi_music2000_out2.jack_enabled || midi_music2000_out3.jack_enabled) {
+    if ((sound_music5000 && midi_music4000.jack_enabled) || m2000_any_jack_enabled()) {
         if ((jack_client = jack_client_open("B-Em", JackNullOption, &status))) {
             log_debug("midi-linux: jack client open");
             if ((err = jack_set_process_callback(jack_client, midi_jack_process, NULL)) == 0) {
                 log_debug("midi-linux: jack process callback set");
                 m4000_jack_init();
-                m2000_jack_init(&midi_music2000_out1, "midi-out1");
-                m2000_jack_init(&midi_music2000_out2, "midi-out2");
-                m2000_jack_init(&midi_music2000_out3, "midi-out3");
+                for (int i = 0; i < MIDI_NUM_OUTPUTS; i++)
+                    m2000_jack_init(i);
                 if ((err = jack_activate(jack_client)) == 0) {
                     log_debug("midi-linux: jack active");
                     jack_started = 1;
@@ -137,17 +144,23 @@ static inline void midi_jack_close(void) {
 }
 
 static inline void midi_jack_load_config(void) {
+    char key[40];
+
     midi_music4000.jack_enabled = get_config_bool("midi", "music4000_jack_enabled", 0);
-    midi_music2000_out1.jack_enabled = get_config_bool("midi", "music2000_out1_jack_enabled", 0);
-    midi_music2000_out2.jack_enabled = get_config_bool("midi", "music2000_out2_jack_enabled", 0);
-    midi_music2000_out3.jack_enabled = get_config_bool("midi", "music2000_out3_jack_enabled", 0);
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
+        snprintf(key, sizeof key, "music2000_out%d_jack_enabled", i + 1);
+        midi_music2000_out[i].jack_enabled = get_config_bool("midi", key, 0);
+    }
 }
 
 static inline void midi_jack_save_config(void) {
+    char key[40];
+
     set_config_bool("midi", "music4000_jack_enabled", midi_music4000.jack_enabled);
-    set_config_bool("midi", "music2000_out1_jack_enabled", midi_music2000_out1.jack_enabled);
-    set_config_bool("midi", "music2000_out2_jack_enabled", midi_music2000_out2.jack_enabled);
-    set_config_bool("midi", "music2000_out3_jack_enabled", midi_music2000_out3.jack_enabled);
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
+        snprintf(key, sizeof key, "music2000_out%d_jack_enabled", i + 1);
+        set_config_bool("midi", key, midi_music2000_out[i].jack_enabled);
+    }
 }
 
 static inline void midi_jack_send_msg(midi_dev_t *midi, uint8_t *buffer, size_t size) {
@@ -195,7 +208,7 @@ static void *alsa_seq_midi_run(void *arg) {
 static void m4000_seq_init(void) {
     int port, err;
 
-    if (midi_music4000.alsa_seq_enabled) {
+    if (sound_music5000 && midi_music4000.alsa_seq_enabled) {
         port = snd_seq_create_simple_port(midi_seq, "b-em:in", SND_SEQ_PORT_CAP_WRITE|SND_SEQ_PORT_CAP_SUBS_WRITE, SND_SEQ_PORT_TYPE_SOFTWARE|SND_SEQ_PORT_TYPE_APPLICATION);
         if (port < 0)
             log_error("midi-linux: unable to create ALSA sequencer port b-em:in: %s", strerror(errno));
@@ -208,10 +221,13 @@ static void m4000_seq_init(void) {
     }
 }
 
-static void m2000_seq_init(midi_dev_t *midi, const char *pname) {
+static void m2000_seq_init(int i) {
+    midi_dev_t *midi = &midi_music2000_out[i];
+    char pname[16];
     int port;
 
-    if (midi->alsa_seq_enabled) {
+    if (music2000_enabled(i) && midi->alsa_seq_enabled) {
+        snprintf(pname, sizeof pname, "b-em:out%d", i + 1);
         port = snd_seq_create_simple_port(midi_seq, pname, SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, SND_SEQ_PORT_TYPE_SOFTWARE);
         if (port < 0)
             log_error("midi-linux: unable to create ALSA MIDI sequencer port %s: %s", pname, strerror(errno));
@@ -222,11 +238,19 @@ static void m2000_seq_init(midi_dev_t *midi, const char *pname) {
     }
 }
 
+static bool m2000_any_seq_enabled(void) {
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++)
+        if (music2000_enabled(i) && midi_music2000_out[i].alsa_seq_enabled)
+            return true;
+    return false;
+}
+
 static inline void midi_alsa_seq_init(void) {
     int status, mode;
+    bool m4000_seq = sound_music5000 && midi_music4000.alsa_seq_enabled;
 
-    if (midi_music2000_out1.alsa_seq_enabled || midi_music2000_out2.alsa_seq_enabled || midi_music2000_out3.alsa_seq_enabled) {
-        if (midi_music4000.alsa_seq_enabled) {
+    if (m2000_any_seq_enabled()) {
+        if (m4000_seq) {
             mode = SND_SEQ_OPEN_DUPLEX;
             log_debug("linux-midi: opening sequencer duplex");
         }
@@ -235,7 +259,7 @@ static inline void midi_alsa_seq_init(void) {
             log_debug("linux-midi: opening sequencer for output");
         }
     } else {
-        if (midi_music4000.alsa_seq_enabled) {
+        if (m4000_seq) {
             mode = SND_SEQ_OPEN_INPUT;
             log_debug("linux-midi: opening sequencer for intput");
         }
@@ -249,9 +273,8 @@ static inline void midi_alsa_seq_init(void) {
             snd_seq_set_client_name(midi_seq, "B-Em");
             log_debug("midi-linux: ALSA MIDI sequencer client created");
             m4000_seq_init();
-            m2000_seq_init(&midi_music2000_out1, "b-em:out1");
-            m2000_seq_init(&midi_music2000_out2, "b-em:out2");
-            m2000_seq_init(&midi_music2000_out3, "b-em:out3");
+            for (int i = 0; i < MIDI_NUM_OUTPUTS; i++)
+                m2000_seq_init(i);
         }
     }
 }
@@ -417,10 +440,11 @@ static void *alsa_raw_midi_run(void *arg) {
     return NULL;
 }
 
-static void m2000_raw_init(midi_dev_t *midi) {
+static void m2000_raw_init(int i) {
+    midi_dev_t *midi = &midi_music2000_out[i];
     int status;
 
-    if (midi->alsa_raw_enabled) {
+    if (music2000_enabled(i) && midi->alsa_raw_enabled) {
         if ((status = snd_rawmidi_open(NULL, &midi->alsa_raw_port, midi->alsa_raw_device, 0)) < 0) {
             log_warn("midi-linux: unable to open ALSA raw MIDI port '%s': %s", midi->alsa_raw_device, snd_strerror(status));
             midi->alsa_raw_port = NULL;
@@ -431,43 +455,46 @@ static void m2000_raw_init(midi_dev_t *midi) {
 static inline void midi_alsa_raw_init(void) {
     int err;
 
-    if (midi_music4000.alsa_raw_enabled)
+    if (sound_music5000 && midi_music4000.alsa_raw_enabled)
         if ((err = pthread_create(&alsa_raw_thread, NULL, alsa_raw_midi_run, NULL)) != 0)
             log_error("midi-linux: unable to create ALSA raw MIDI thread: %s", strerror(err));
 
-    m2000_raw_init(&midi_music2000_out1);
-    m2000_raw_init(&midi_music2000_out2);
-    m2000_raw_init(&midi_music2000_out3);
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++)
+        m2000_raw_init(i);
 }
 
 static inline void midi_alsa_load_config(void) {
     midi_music4000.alsa_seq_enabled = get_config_bool("midi", "music4000_alsa_seq_enabled", 1);
     midi_music4000.alsa_raw_enabled = get_config_bool("midi", "music4000_alsa_raw_enabled", 1);
     midi_music4000.alsa_raw_device  = strdup(get_config_string("midi", "music4000_alsa_raw_device", "default"));
-    midi_music2000_out1.alsa_seq_enabled = get_config_bool("midi", "music2000_out1_alsa_seq_enabled", 0);
-    midi_music2000_out2.alsa_seq_enabled = get_config_bool("midi", "music2000_out2_alsa_seq_enabled", 0);
-    midi_music2000_out3.alsa_seq_enabled = get_config_bool("midi", "music2000_out3_alsa_seq_enabled", 0);
-    midi_music2000_out1.alsa_raw_enabled = get_config_bool("midi", "music2000_out1_alsa_raw_enabled", 1);
-    midi_music2000_out2.alsa_raw_enabled = get_config_bool("midi", "music2000_out2_alsa_raw_enabled", 0);
-    midi_music2000_out3.alsa_raw_enabled = get_config_bool("midi", "music2000_out3_alsa_raw_enabled", 0);
-    midi_music2000_out1.alsa_raw_device  = strdup(get_config_string("midi", "music2000_out1_alsa_raw_device", "default"));
-    midi_music2000_out2.alsa_raw_device  = strdup(get_config_string("midi", "music2000_out2_alsa_raw_device", "default"));
-    midi_music2000_out3.alsa_raw_device  = strdup(get_config_string("midi", "music2000_out3_alsa_raw_device", "default"));
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
+        midi_dev_t *midi = &midi_music2000_out[i];
+        char key[40];
+
+        snprintf(key, sizeof key, "music2000_out%d_alsa_seq_enabled", i + 1);
+        midi->alsa_seq_enabled = get_config_bool("midi", key, 0);
+        snprintf(key, sizeof key, "music2000_out%d_alsa_raw_enabled", i + 1);
+        midi->alsa_raw_enabled = get_config_bool("midi", key, i == 0); // only out1 on by default
+        snprintf(key, sizeof key, "music2000_out%d_alsa_raw_device", i + 1);
+        midi->alsa_raw_device  = strdup(get_config_string("midi", key, "default"));
+    }
 }
 
 static inline void midi_alsa_save_config(void) {
     set_config_bool("midi", "music4000_alsa_seq_enabled", midi_music4000.alsa_seq_enabled);
     set_config_bool("midi", "music4000_alsa_raw_enabled", midi_music4000.alsa_raw_enabled);
     set_config_string("midi", "music4000_alsa_raw_device", midi_music4000.alsa_raw_device);
-    set_config_bool("midi", "music2000_out1_alsa_seq_enabled", midi_music2000_out1.alsa_seq_enabled);
-    set_config_bool("midi", "music2000_out2_alsa_seq_enabled", midi_music2000_out2.alsa_seq_enabled);
-    set_config_bool("midi", "music2000_out3_alsa_seq_enabled", midi_music2000_out3.alsa_seq_enabled);
-    set_config_bool("midi", "music2000_out1_alsa_raw_enabled", midi_music2000_out1.alsa_raw_enabled);
-    set_config_bool("midi", "music2000_out2_alsa_raw_enabled", midi_music2000_out2.alsa_raw_enabled);
-    set_config_bool("midi", "music2000_out3_alsa_raw_enabled", midi_music2000_out3.alsa_raw_enabled);
-    set_config_string("midi", "music2000_out1_alsa_raw_device", midi_music2000_out1.alsa_raw_device);
-    set_config_string("midi", "music2000_out2_alsa_raw_device", midi_music2000_out2.alsa_raw_device);
-    set_config_string("midi", "music2000_out3_alsa_raw_device", midi_music2000_out3.alsa_raw_device);
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
+        midi_dev_t *midi = &midi_music2000_out[i];
+        char key[40];
+
+        snprintf(key, sizeof key, "music2000_out%d_alsa_seq_enabled", i + 1);
+        set_config_bool("midi", key, midi->alsa_seq_enabled);
+        snprintf(key, sizeof key, "music2000_out%d_alsa_raw_enabled", i + 1);
+        set_config_bool("midi", key, midi->alsa_raw_enabled);
+        snprintf(key, sizeof key, "music2000_out%d_alsa_raw_device", i + 1);
+        set_config_string("midi", key, midi->alsa_raw_device);
+    }
 }
 
 static inline void midi_alsa_raw_send_msg(midi_dev_t *midi, uint8_t *buffer, size_t size) {
@@ -488,12 +515,11 @@ static inline void midi_alsa_raw_send_msg(midi_dev_t *midi, uint8_t *buffer, siz
 #endif
 
 void midi_init(void) {
-    if (sound_music5000) {
-        midi_jack_init();
-        midi_alsa_seq_init();
-        midi_alsa_raw_init();
-        music2000_init(&midi_music2000_out1, &midi_music2000_out2, &midi_music2000_out3);
-    }
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++)
+        music2000_set_output(i, &midi_music2000_out[i]);
+    midi_jack_init();
+    midi_alsa_seq_init();
+    midi_alsa_raw_init();
 }
 
 void midi_close(void) {

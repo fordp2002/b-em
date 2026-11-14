@@ -8,6 +8,11 @@
 uint8_t music2000_read(uint32_t addr);
 void music2000_write(uint32_t addr, uint8_t val);
 void music2000_poll(void);
-void music2000_init(midi_dev_t *out1, midi_dev_t *out2, midi_dev_t *out3);
+void music2000_set_output(int num, midi_dev_t *dev);
+bool music2000_enabled(int num);
+void music2000_set_enabled(int num, bool enabled);
+uint16_t music2000_get_base(int num);
+void music2000_load_config(void);
+void music2000_save_config(void);
 
 #endif

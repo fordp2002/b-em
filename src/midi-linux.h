@@ -29,8 +29,6 @@ struct _midi_dev {
 };
 
 extern midi_dev_t midi_music4000;
-extern midi_dev_t midi_music2000_out1;
-extern midi_dev_t midi_music2000_out2;
-extern midi_dev_t midi_music2000_out3;
+extern midi_dev_t midi_music2000_out[MIDI_NUM_OUTPUTS];
 
 #endif

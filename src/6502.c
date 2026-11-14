@@ -405,12 +405,6 @@ static uint32_t do_readmem(uint32_t addr)
         }
 
         switch (addr & ~3) {
-            case 0xFC00:
-            case 0xFC08:
-            case 0xFC0C:
-                if (sound_music5000)
-                    return music2000_read(addr);
-                break;
         case 0xFC20:
         case 0xFC24:
         case 0xFC28:
@@ -554,7 +548,9 @@ static uint32_t do_readmem(uint32_t addr)
         case 0xFEFC:
                 return tube_host_read((uint16_t)addr);
         }
-        if (addr >= 0xFC00 && addr < 0xFE00)
+        if (addr >= 0xFC00 && addr < 0xFD00)
+                return music2000_read(addr); // lowest priority: &FF if no MIDI interface here
+        if (addr >= 0xFD00 && addr < 0xFE00)
                 return 0xFF;
         return addr >> 8;
 }
@@ -834,12 +830,6 @@ static void do_writemem(uint32_t addr, uint32_t val)
         }
 
         switch (addr & ~3) {
-            case 0xFC00:
-            case 0xFC08:
-            case 0xFC0C:
-                if (sound_music5000)
-                    music2000_write(addr, (uint8_t)val);
-                break;
         case 0xFC20:
         case 0xFC24:
         case 0xFC28:
@@ -1001,6 +991,8 @@ static void do_writemem(uint32_t addr, uint32_t val)
                 tube_host_write((uint16_t)addr, (uint8_t)val);
                 break;
         }
+        if (addr >= 0xFC00 && addr < 0xFD00)
+                music2000_write(addr, (uint8_t)val); // after other devices, as on a shared bus
 }
 
 void writemem(uint16_t addr, uint8_t val)
@@ -1081,8 +1073,7 @@ static inline uint16_t getsw(void)
 static void otherstuff_poll(void) {
     otherstuffcount += 128;
     acia_poll(&sysacia);
-    if (sound_music5000)
-        music2000_poll();
+    music2000_poll();
     if (!tapelcount) {
         tape_poll();
         tapelcount = tapellatch;

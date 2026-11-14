@@ -16,6 +16,7 @@
 #include "music5000.h"
 #include "ide.h"
 #include "midi.h"
+#include "music2000.h"
 #include "scsi.h"
 #include "sdf.h"
 #include "sn76489.h"
@@ -279,6 +280,7 @@ void config_load(ALLEGRO_PATH *path)
                 keylookup[key] = bbckey;
         }
     }
+    music2000_load_config();
     midi_load_config();
 }
 
@@ -420,6 +422,7 @@ void config_save(void)
                 al_set_config_value(bem_cfg, "user_keyboard", al_keycode_to_name(c), buf);
             }
         }
+        music2000_save_config();
         midi_save_config();
         log_debug("config: saving config to %s", cpath);
         al_save_config_file(cpath, bem_cfg);

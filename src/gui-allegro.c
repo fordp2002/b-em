@@ -41,6 +41,7 @@
 #if defined(HAVE_JACK_JACK_H) || defined(HAVE_ALSA_ASOUNDLIB_H)
 #define HAVE_LINUX_MIDI
 #include "midi-linux.h"
+#include "music2000.h"
 #endif
 
 #define ROM_LABEL_LEN 50
@@ -488,33 +489,22 @@ static ALLEGRO_MENU *create_midi_menu(void)
     add_checkbox_item(sub, "ALSA Raw MIDI",  IDM_MIDI_M4000_ARAW, midi_music4000.alsa_raw_enabled);
 #endif
     al_append_menu_item(menu, "M4000 Keyboard", 0, 0, NULL, sub);
-    sub = al_create_menu();
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
+        midi_dev_t *midi = &midi_music2000_out[i];
+        char title[32];
+
+        sub = al_create_menu();
+        add_checkbox_item(sub, "Enabled", menu_id_num(IDM_MIDI_M2000_ENABLE, i), music2000_enabled(i));
 #ifdef HAVE_JACK_JACK_H
-    add_checkbox_item(sub, "JACK MIDI", IDM_MIDI_M2000_OUT1_JACK, midi_music2000_out1.jack_enabled);
+        add_checkbox_item(sub, "JACK MIDI", menu_id_num(IDM_MIDI_M2000_JACK, i), midi->jack_enabled);
 #endif
 #ifdef HAVE_ALSA_ASOUNDLIB_H
-    add_checkbox_item(sub, "ALSA Sequencer", IDM_MIDI_M2000_OUT1_ASEQ, midi_music2000_out1.alsa_seq_enabled);
-    add_checkbox_item(sub, "ALSA Raw MIDI",  IDM_MIDI_M2000_OUT1_ARAW, midi_music2000_out1.alsa_raw_enabled);
+        add_checkbox_item(sub, "ALSA Sequencer", menu_id_num(IDM_MIDI_M2000_ASEQ, i), midi->alsa_seq_enabled);
+        add_checkbox_item(sub, "ALSA Raw MIDI",  menu_id_num(IDM_MIDI_M2000_ARAW, i), midi->alsa_raw_enabled);
 #endif
-    al_append_menu_item(menu, "M2000 I/F O/P 1", 0, 0, NULL, sub);
-    sub = al_create_menu();
-#ifdef HAVE_JACK_JACK_H
-    add_checkbox_item(sub, "JACK MIDI", IDM_MIDI_M2000_OUT2_JACK, midi_music2000_out2.jack_enabled);
-#endif
-#ifdef HAVE_ALSA_ASOUNDLIB_H
-    add_checkbox_item(sub, "ALSA Sequencer", IDM_MIDI_M2000_OUT2_ASEQ, midi_music2000_out2.alsa_seq_enabled);
-    add_checkbox_item(sub, "ALSA Raw MIDI",  IDM_MIDI_M2000_OUT2_ARAW, midi_music2000_out2.alsa_raw_enabled);
-#endif
-    al_append_menu_item(menu, "M2000 I/F O/P 2", 0, 0, NULL, sub);
-    sub = al_create_menu();
-#ifdef HAVE_JACK_JACK_H
-    add_checkbox_item(sub, "JACK MIDI", IDM_MIDI_M2000_OUT3_JACK, midi_music2000_out3.jack_enabled);
-#endif
-#ifdef HAVE_ALSA_ASOUNDLIB_H
-    add_checkbox_item(sub, "ALSA Sequencer", IDM_MIDI_M2000_OUT3_ASEQ, midi_music2000_out3.alsa_seq_enabled);
-    add_checkbox_item(sub, "ALSA Raw MIDI",  IDM_MIDI_M2000_OUT3_ARAW, midi_music2000_out3.alsa_raw_enabled);
-#endif
-    al_append_menu_item(menu, "M2000 I/F O/P 3", 0, 0, NULL, sub);
+        snprintf(title, sizeof title, "M2000 I/F O/P %d (&%04X)", i + 1, music2000_get_base(i));
+        al_append_menu_item(menu, title, 0, 0, NULL, sub);
+    }
     return menu;
 }
 
@@ -1455,18 +1445,15 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
         case IDM_DISC_VOL:
             ddnoise_vol = radio_event_simple(event, ddnoise_vol);
             break;
+        case IDM_MIDI_M2000_ENABLE:
+            music2000_set_enabled(menu_get_num(event), !music2000_enabled(menu_get_num(event)));
+            break;
 #ifdef HAVE_JACK_JACK_H
         case IDM_MIDI_M4000_JACK:
             midi_music4000.jack_enabled = !midi_music4000.jack_enabled;
             break;
-        case IDM_MIDI_M2000_OUT1_JACK:
-            midi_music2000_out1.jack_enabled = !midi_music2000_out1.jack_enabled;
-            break;
-        case IDM_MIDI_M2000_OUT2_JACK:
-            midi_music2000_out2.jack_enabled = !midi_music2000_out2.jack_enabled;
-            break;
-        case IDM_MIDI_M2000_OUT3_JACK:
-            midi_music2000_out3.jack_enabled = !midi_music2000_out3.jack_enabled;
+        case IDM_MIDI_M2000_JACK:
+            midi_music2000_out[menu_get_num(event)].jack_enabled = !midi_music2000_out[menu_get_num(event)].jack_enabled;
             break;
 #endif
 #ifdef HAVE_ALSA_ASOUNDLIB_H
@@ -1476,23 +1463,11 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
         case IDM_MIDI_M4000_ARAW:
             midi_music4000.alsa_raw_enabled = !midi_music4000.alsa_raw_enabled;
             break;
-        case IDM_MIDI_M2000_OUT1_ASEQ:
-            midi_music2000_out1.alsa_seq_enabled = !midi_music2000_out1.alsa_seq_enabled;
+        case IDM_MIDI_M2000_ASEQ:
+            midi_music2000_out[menu_get_num(event)].alsa_seq_enabled = !midi_music2000_out[menu_get_num(event)].alsa_seq_enabled;
             break;
-        case IDM_MIDI_M2000_OUT1_ARAW:
-            midi_music2000_out1.alsa_raw_enabled = !midi_music2000_out1.alsa_raw_enabled;
-            break;
-        case IDM_MIDI_M2000_OUT2_ASEQ:
-            midi_music2000_out2.alsa_seq_enabled = !midi_music2000_out2.alsa_seq_enabled;
-            break;
-        case IDM_MIDI_M2000_OUT2_ARAW:
-            midi_music2000_out2.alsa_raw_enabled = !midi_music2000_out2.alsa_raw_enabled;
-            break;
-        case IDM_MIDI_M2000_OUT3_ASEQ:
-            midi_music2000_out3.alsa_seq_enabled = !midi_music2000_out3.alsa_seq_enabled;
-            break;
-        case IDM_MIDI_M2000_OUT3_ARAW:
-            midi_music2000_out3.alsa_raw_enabled = !midi_music2000_out3.alsa_raw_enabled;
+        case IDM_MIDI_M2000_ARAW:
+            midi_music2000_out[menu_get_num(event)].alsa_raw_enabled = !midi_music2000_out[menu_get_num(event)].alsa_raw_enabled;
             break;
 #endif
         case IDM_SPEED:
