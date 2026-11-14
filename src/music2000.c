@@ -1,6 +1,7 @@
 #include "music2000.h"
 #include "acia.h"
 #include "config.h"
+#include "sound.h"
 
 #define M2000_MAP_SIZE  128     // one entry per even address &FC00-&FCFE
 #define M2000_MAP_NONE  0xff
@@ -124,15 +125,15 @@ static void music2000_build_map(void) {
 uint8_t music2000_read(uint32_t addr) {
     uint8_t inst = m2000_map[(addr & 0xff) >> 1];
 
-    if (inst == M2000_MAP_NONE)
-        return 0xff;
-    return acia_read(&music2000_acia[inst], addr);
+    if (inst < MIDI_NUM_OUTPUTS)
+        return acia_read(&music2000_acia[inst], addr);
+    return 0xff;
 }
 
 void music2000_write(uint32_t addr, uint8_t val) {
     uint8_t inst = m2000_map[(addr & 0xff) >> 1];
 
-    if (inst != M2000_MAP_NONE)
+    if (inst < MIDI_NUM_OUTPUTS)
         acia_write(&music2000_acia[inst], addr, val);
 }
 
@@ -165,13 +166,14 @@ uint16_t music2000_get_base(int num) {
 }
 
 void music2000_load_config(void) {
-    char key[32];
+    char key[64];
 
     for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
         unsigned base;
 
         snprintf(key, sizeof key, "music2000_out%d_enabled", i + 1);
-        m2000_out[i].enabled = get_config_bool("midi", key, false);
+        // If not configured yet, follow the Music 5000 setting so existing setups keep working.
+        m2000_out[i].enabled = get_config_bool("midi", key, sound_music5000);
         snprintf(key, sizeof key, "music2000_out%d_base", i + 1);
         base = get_config_int("midi", key, 0xfc08 + 2 * i);
         m2000_out[i].base = 0xfc00 | (base & 0xfe);
@@ -182,7 +184,7 @@ void music2000_load_config(void) {
 }
 
 void music2000_save_config(void) {
-    char key[32];
+    char key[64];
 
     for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
         snprintf(key, sizeof key, "music2000_out%d_enabled", i + 1);

@@ -405,18 +405,6 @@ static uint32_t do_readmem(uint32_t addr)
         }
 
         switch (addr & ~3) {
-        case 0xFC20:
-        case 0xFC24:
-        case 0xFC28:
-        case 0xFC2C:
-        case 0xFC30:
-        case 0xFC34:
-        case 0xFC38:
-        case 0xFC3C:
-                if (sound_beebsid)
-                        return sid_read((uint16_t)addr);
-                break;
-
         case 0xFC40:
         case 0xFC44:
         case 0xFC48:
@@ -547,10 +535,24 @@ static uint32_t do_readmem(uint32_t addr)
         case 0xFEF8:
         case 0xFEFC:
                 return tube_host_read((uint16_t)addr);
+
+        case 0xFC20:
+        case 0xFC24:
+        case 0xFC28:
+        case 0xFC2C:
+        case 0xFC30:
+        case 0xFC34:
+        case 0xFC38:
+        case 0xFC3C:
+                if (sound_beebsid)
+                        return sid_read((uint16_t)addr);
+                // fall through
+        default:
+                if ((addr >> 8) == 0xFC)
+                        return music2000_read(addr); // &FF if no MIDI interface here
+                break;
         }
-        if (addr >= 0xFC00 && addr < 0xFD00)
-                return music2000_read(addr); // lowest priority: &FF if no MIDI interface here
-        if (addr >= 0xFD00 && addr < 0xFE00)
+        if (addr >= 0xFC00 && addr < 0xFE00)
                 return 0xFF;
         return addr >> 8;
 }
@@ -830,18 +832,6 @@ static void do_writemem(uint32_t addr, uint32_t val)
         }
 
         switch (addr & ~3) {
-        case 0xFC20:
-        case 0xFC24:
-        case 0xFC28:
-        case 0xFC2C:
-        case 0xFC30:
-        case 0xFC34:
-        case 0xFC38:
-        case 0xFC3C:
-                if (sound_beebsid)
-                        sid_write((uint16_t)addr, (uint8_t)val);
-                break;
-
         case 0xFC40:
         case 0xFC44:
         case 0xFC48:
@@ -990,9 +980,25 @@ static void do_writemem(uint32_t addr, uint32_t val)
         case 0xFEFC:
                 tube_host_write((uint16_t)addr, (uint8_t)val);
                 break;
+
+        case 0xFC20:
+        case 0xFC24:
+        case 0xFC28:
+        case 0xFC2C:
+        case 0xFC30:
+        case 0xFC34:
+        case 0xFC38:
+        case 0xFC3C:
+                if (sound_beebsid) {
+                        sid_write((uint16_t)addr, (uint8_t)val);
+                        break;
+                }
+                // fall through
+        default:
+                if ((addr >> 8) == 0xFC)
+                        music2000_write(addr, (uint8_t)val);
+                break;
         }
-        if (addr >= 0xFC00 && addr < 0xFD00)
-                music2000_write(addr, (uint8_t)val); // after other devices, as on a shared bus
 }
 
 void writemem(uint16_t addr, uint8_t val)

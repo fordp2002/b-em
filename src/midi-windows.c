@@ -140,7 +140,7 @@ void midi_close(void) {
 
 void midi_load_config(void) {
     const char *ptr;
-    char key[32];
+    char key[64];
 
     if ((ptr = get_config_string("midi", "music4000_in_device",   NULL)))
         szMusic4000InDevName = strdup(ptr);
@@ -152,7 +152,7 @@ void midi_load_config(void) {
 };
 
 void midi_save_config(void) {
-    char key[32];
+    char key[64];
 
     if (szMusic4000InDevName)
         set_config_string("midi", "music4000_in_device", szMusic4000InDevName);

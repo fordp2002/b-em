@@ -87,7 +87,7 @@ static inline void m4000_jack_init(void) {
 
 static inline void m2000_jack_init(int i) {
     midi_dev_t *midi = &midi_music2000_out[i];
-    char pname[16];
+    char pname[32];
 
     if (music2000_enabled(i) && midi->jack_enabled) {
         snprintf(pname, sizeof pname, "midi-out%d", i + 1);
@@ -144,7 +144,7 @@ static inline void midi_jack_close(void) {
 }
 
 static inline void midi_jack_load_config(void) {
-    char key[40];
+    char key[64];
 
     midi_music4000.jack_enabled = get_config_bool("midi", "music4000_jack_enabled", 0);
     for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
@@ -154,7 +154,7 @@ static inline void midi_jack_load_config(void) {
 }
 
 static inline void midi_jack_save_config(void) {
-    char key[40];
+    char key[64];
 
     set_config_bool("midi", "music4000_jack_enabled", midi_music4000.jack_enabled);
     for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
@@ -223,7 +223,7 @@ static void m4000_seq_init(void) {
 
 static void m2000_seq_init(int i) {
     midi_dev_t *midi = &midi_music2000_out[i];
-    char pname[16];
+    char pname[32];
     int port;
 
     if (music2000_enabled(i) && midi->alsa_seq_enabled) {
@@ -469,7 +469,7 @@ static inline void midi_alsa_load_config(void) {
     midi_music4000.alsa_raw_device  = strdup(get_config_string("midi", "music4000_alsa_raw_device", "default"));
     for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
         midi_dev_t *midi = &midi_music2000_out[i];
-        char key[40];
+        char key[64];
 
         snprintf(key, sizeof key, "music2000_out%d_alsa_seq_enabled", i + 1);
         midi->alsa_seq_enabled = get_config_bool("midi", key, 0);
@@ -486,7 +486,7 @@ static inline void midi_alsa_save_config(void) {
     set_config_string("midi", "music4000_alsa_raw_device", midi_music4000.alsa_raw_device);
     for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
         midi_dev_t *midi = &midi_music2000_out[i];
-        char key[40];
+        char key[64];
 
         snprintf(key, sizeof key, "music2000_out%d_alsa_seq_enabled", i + 1);
         set_config_bool("midi", key, midi->alsa_seq_enabled);
