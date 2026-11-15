@@ -477,6 +477,10 @@ static ALLEGRO_MENU *create_sound_menu(void)
 
 #ifdef HAVE_LINUX_MIDI
 
+static char const *midi_interrupt_names[] = {
+    "Not connected", "IRQ", "NMI", NULL
+};
+
 static ALLEGRO_MENU *create_midi_menu(void)
 {
     ALLEGRO_MENU *menu = al_create_menu();
@@ -495,6 +499,13 @@ static ALLEGRO_MENU *create_midi_menu(void)
 
         sub = al_create_menu();
         add_checkbox_item(sub, "Enabled", menu_id_num(IDM_MIDI_M2000_ENABLE, i), music2000_enabled(i));
+        ALLEGRO_MENU *interrupt_sub = al_create_menu();
+        int current_interrupt = music2000_get_interrupt(i);
+        for (int route = MUSIC2000_INTERRUPT_NONE; route <= MUSIC2000_INTERRUPT_NMI; route++)
+            add_checkbox_item(interrupt_sub, midi_interrupt_names[route],
+                              menu_id_num(IDM_MIDI_M2000_INTERRUPT_NONE + route, i),
+                              route == current_interrupt);
+        al_append_menu_item(sub, "6850 Interrupt line", 0, 0, NULL, interrupt_sub);
 #ifdef HAVE_JACK_JACK_H
         add_checkbox_item(sub, "JACK MIDI", menu_id_num(IDM_MIDI_M2000_JACK, i), midi->jack_enabled);
 #endif
@@ -502,7 +513,7 @@ static ALLEGRO_MENU *create_midi_menu(void)
         add_checkbox_item(sub, "ALSA Sequencer", menu_id_num(IDM_MIDI_M2000_ASEQ, i), midi->alsa_seq_enabled);
         add_checkbox_item(sub, "ALSA Raw MIDI",  menu_id_num(IDM_MIDI_M2000_ARAW, i), midi->alsa_raw_enabled);
 #endif
-        snprintf(title, sizeof title, "M2000 I/F O/P %d (&%04X)", i + 1, music2000_get_base(i));
+        snprintf(title, sizeof title, "MiDI INTERFACE %d (&%04X)", i + 1, music2000_get_base(i));
         al_append_menu_item(menu, title, 0, 0, NULL, sub);
     }
     return menu;
@@ -1448,6 +1459,25 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
         case IDM_MIDI_M2000_ENABLE:
             music2000_set_enabled(menu_get_num(event), !music2000_enabled(menu_get_num(event)));
             break;
+#ifdef HAVE_LINUX_MIDI
+        case IDM_MIDI_M2000_INTERRUPT_NONE:
+        case IDM_MIDI_M2000_INTERRUPT_IRQ:
+        case IDM_MIDI_M2000_INTERRUPT_NMI: {
+            int output = menu_get_num(event);
+            music2000_interrupt_t route = menu_get_id(event) - IDM_MIDI_M2000_INTERRUPT_NONE;
+            music2000_interrupt_t old_route = music2000_get_interrupt(output);
+            ALLEGRO_MENU *menu = (ALLEGRO_MENU *)event->user.data3;
+
+            if (route == old_route)
+                al_set_menu_item_flags(menu, menu_id_num(menu_get_id(event), output),
+                                       ALLEGRO_MENU_ITEM_CHECKBOX|ALLEGRO_MENU_ITEM_CHECKED);
+            else
+                al_set_menu_item_flags(menu, menu_id_num(IDM_MIDI_M2000_INTERRUPT_NONE + old_route, output),
+                                       ALLEGRO_MENU_ITEM_CHECKBOX);
+            music2000_set_interrupt(output, route);
+            break;
+        }
+#endif
 #ifdef HAVE_JACK_JACK_H
         case IDM_MIDI_M4000_JACK:
             midi_music4000.jack_enabled = !midi_music4000.jack_enabled;

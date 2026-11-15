@@ -29,11 +29,21 @@ static void acia_updateint(ACIA *acia) {
     if (rx_int(acia) || tx_int(acia)) {
         log_debug("acia: %s, interrupt asserted", acia->name);
         interrupt |= acia->intnum;
+        nmi |= acia->nmimask;
     }
     else {
         log_debug("acia: %s, interrupt de-asserted", acia->name);
         interrupt &= ~acia->intnum;
+        nmi &= ~acia->nmimask;
     }
+}
+
+void acia_set_interrupt(ACIA *acia, unsigned intnum, unsigned nmimask) {
+    interrupt &= ~acia->intnum;
+    nmi &= ~acia->nmimask;
+    acia->intnum = intnum;
+    acia->nmimask = nmimask;
+    acia_updateint(acia);
 }
 
 uint8_t acia_read(ACIA *acia, uint16_t addr) {

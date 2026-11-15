@@ -15,6 +15,7 @@ struct acia {
     void *udata;
     const char name[8];
     unsigned intnum;
+    unsigned nmimask;
 };
 
 uint8_t acia_read(ACIA *acia, uint16_t addr);
@@ -29,5 +30,6 @@ void acia_dcdhigh(ACIA *acia);
 void acia_dcdlow(ACIA *acia);
 void acia_ctson(ACIA *acia);
 void acia_ctsoff(ACIA *acia);
+void acia_set_interrupt(ACIA *acia, unsigned intnum, unsigned nmimask);
 
 #endif

@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "compilerPath": "/usr/bin/gcc",
+            "intelliSenseMode": "linux-gcc-x64",
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++11",
+            "defines": [
+                "HAVE_ALSA_ASOUNDLIB_H=1",
+                "HAVE_LIBASOUND=1"
+            ],
+            "includePath": [
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/src/**"
+            ]
+        }
+    ],
+    "version": 4
+}

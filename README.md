@@ -484,7 +484,7 @@ Hardware emulated
 | Serial ULA        | Emulated.|
 | Music 5000        | Hybrid synth emulated.  Emulation from Beech|
 | Music 4000        | Hybrid music keyboard.  Emulated via MIDI,  Emulation original to B-Em|
-| Music 2000        | Hybrid MIDI I/F.  Connects to host MIDI,  Emulation original to B-Em|
+| Music 2000        | Hybrid MIDI I/F with four host MIDI outputs; each output's 6850 interrupt can be disconnected or routed to IRQ/NMI. Emulation original to B-Em|
 
 
 Hardware NOT emulated

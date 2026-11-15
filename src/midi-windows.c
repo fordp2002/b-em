@@ -79,9 +79,9 @@ static void MidiOpenOutInternal(UINT nMidiDevice, midi_dev_t *dev) {
     MMRESULT rv;
 
     if ((rv = midiOutOpen(&dev->hMidiOut, nMidiDevice, 0, 0, CALLBACK_NULL)) == MMSYSERR_NOERROR)
-        log_info("midi-windows: opened MIDI out device #%d, %s for Music 2000 Out %d", nMidiDevice, dev->szName, MidiOutNum(dev));
+        log_info("midi-windows: opened MIDI out device #%d, %s for MIDI Out %d", nMidiDevice, dev->szName, MidiOutNum(dev));
     else
-        log_warn("midi-windows: unable to open MIDI device #%d, %s for Music 2000 Out %d, rv=%d", nMidiDevice, dev->szName, MidiOutNum(dev), rv);
+        log_warn("midi-windows: unable to open MIDI device #%d, %s for MIDI Out %d, rv=%d", nMidiDevice, dev->szName, MidiOutNum(dev), rv);
 }
 
 static void MidiOpenM2000Devs(void) {

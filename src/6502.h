@@ -19,6 +19,7 @@ extern int interrupt;
  * Bit  5 (20):
  * Bit  6 (40):
  * Bit  7 (80): Sys VIA T2 special case
+ * Bits 8-11 (100-800): Music 2000 ACIA 1-4
  */
 extern int nmi;
 

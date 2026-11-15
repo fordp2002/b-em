@@ -6,6 +6,9 @@
 #define M2000_MAP_SIZE  128     // one entry per even address &FC00-&FCFE
 #define M2000_MAP_NONE  0xff
 
+#define M2000_NMI_MASK(n) (0x08u << (n))
+#define M2000_IRQ_MASK(n) (0x100u << ((n) - 1))
+
 typedef enum {
     MS_GROUND,
     MS_ONE_OF_ONE,
@@ -21,6 +24,7 @@ typedef struct {
     uint8_t rtmsg;
     bool    enabled;
     uint16_t base;              // even address in FRED, &FC00-&FCFE
+    music2000_interrupt_t interrupt;
 } m2000_dev_t;
 
 static m2000_dev_t m2000_out[MIDI_NUM_OUTPUTS];
@@ -97,14 +101,15 @@ static void acia_tx(ACIA *acia, uint8_t data) {
 #define M2000_ACIA(n) { \
     .tx_hook = acia_tx, \
     .udata   = &m2000_out[n - 1], \
-    .intnum  = 0x100 * n, \
+    .intnum  = M2000_IRQ_MASK(n), \
     .name    = "M2000:" #n \
 }
 
 static ACIA music2000_acia[] = {
     M2000_ACIA(1),
     M2000_ACIA(2),
-    M2000_ACIA(3)
+    M2000_ACIA(3),
+    M2000_ACIA(4)
 };
 
 _Static_assert(sizeof(music2000_acia) / sizeof(music2000_acia[0]) == MIDI_NUM_OUTPUTS, "one ACIA per MIDI output");
@@ -159,6 +164,34 @@ void music2000_set_enabled(int num, bool enabled) {
     }
 }
 
+music2000_interrupt_t music2000_get_interrupt(int num) {
+    if (num >= 0 && num < MIDI_NUM_OUTPUTS)
+        return m2000_out[num].interrupt;
+    return MUSIC2000_INTERRUPT_NONE;
+}
+
+void music2000_set_interrupt(int num, music2000_interrupt_t route) {
+    unsigned intnum = 0;
+    unsigned nmimask = 0;
+
+    if (num < 0 || num >= MIDI_NUM_OUTPUTS) {
+        log_warn("music2000: invalid output index %d for interrupt routing", num);
+        return;
+    }
+    if (route < MUSIC2000_INTERRUPT_NONE || route > MUSIC2000_INTERRUPT_NMI) {
+        log_warn("music2000: out%d invalid interrupt route %d", num + 1, route);
+        return;
+    }
+
+    if (route == MUSIC2000_INTERRUPT_IRQ)
+        intnum = M2000_IRQ_MASK(num + 1);
+    else if (route == MUSIC2000_INTERRUPT_NMI)
+        nmimask = M2000_NMI_MASK(num);
+
+    m2000_out[num].interrupt = route;
+    acia_set_interrupt(&music2000_acia[num], intnum, nmimask);
+}
+
 uint16_t music2000_get_base(int num) {
     if (num >= 0 && num < MIDI_NUM_OUTPUTS)
         return m2000_out[num].base;
@@ -170,10 +203,18 @@ void music2000_load_config(void) {
 
     for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
         unsigned base;
+        int route;
 
         snprintf(key, sizeof key, "music2000_out%d_enabled", i + 1);
         // If not configured yet, follow the Music 5000 setting so existing setups keep working.
         m2000_out[i].enabled = get_config_bool("midi", key, sound_music5000);
+        snprintf(key, sizeof key, "music2000_out%d_interrupt", i + 1);
+        route = get_config_int("midi", key, MUSIC2000_INTERRUPT_IRQ);
+        if (route < MUSIC2000_INTERRUPT_NONE || route > MUSIC2000_INTERRUPT_NMI) {
+            log_warn("music2000: out%d invalid interrupt route %d, using IRQ", i + 1, route);
+            route = MUSIC2000_INTERRUPT_IRQ;
+        }
+        music2000_set_interrupt(i, (music2000_interrupt_t)route);
         snprintf(key, sizeof key, "music2000_out%d_base", i + 1);
         base = get_config_int("midi", key, 0xfc08 + 2 * i);
         m2000_out[i].base = 0xfc00 | (base & 0xfe);
@@ -189,6 +230,8 @@ void music2000_save_config(void) {
     for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
         snprintf(key, sizeof key, "music2000_out%d_enabled", i + 1);
         set_config_bool("midi", key, m2000_out[i].enabled);
+        snprintf(key, sizeof key, "music2000_out%d_interrupt", i + 1);
+        set_config_int("midi", key, m2000_out[i].interrupt);
         snprintf(key, sizeof key, "music2000_out%d_base", i + 1);
         set_config_hex("midi", key, m2000_out[i].base);
     }

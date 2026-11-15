@@ -1,7 +1,7 @@
 #ifndef MIDI_INC_H
 #define MIDI_INC_H
 
-#define MIDI_NUM_OUTPUTS 3
+#define MIDI_NUM_OUTPUTS 4
 
 typedef struct _midi_dev midi_dev_t;
 

@@ -9,7 +9,7 @@
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "externalConsole": false,
-            "preLaunchTask": "Build B-em (Linux only)",
+            "preLaunchTask": "Debug Build",
             "linux": {
                 "program": "${workspaceFolder}/b-em",
                 "cwd": "${workspaceFolder}",
@@ -20,7 +20,7 @@
                 "program": "${workspaceFolder}/src/b-em.exe",
                 "cwd": "${workspaceFolder}",
                 "MIMode": "gdb",
-                "preLaunchTask": "Build B-em (Linux only)"
+                "preLaunchTask": "Debug Build"
             }
         }
     ]

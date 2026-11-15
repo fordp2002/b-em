@@ -2,34 +2,43 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build B-em (Linux only)",
+            "label": "Clean",
+            "detail": "make distclean: remove all build output and configure results",
             "type": "process",
-            "command": "make",
+            "command": "bash",
             "args": [
-                "-j4"
+                "-c",
+                "if [ -f Makefile ]; then make distclean; else echo 'Nothing to clean'; fi"
             ],
-            "linux": {
-                "command": "make",
-                "args": [
-                    "-j4"
-                ]
+            "options": {
+                "cwd": "${workspaceFolder}"
             },
-            "windows": {
-                // TODO: Validate the Windows guard and batch build workflow on Windows.
-                "command": "cmd.exe",
-                "args": [
-                    "/d",
-                    "/c",
-                    "echo This build task is supported only on Linux. & exit /b 1"
-                ]
+            "problemMatcher": []
+        },
+        {
+            "label": "Release Build",
+            "detail": "Optimised build (-O3); reconfigures first if the tree is set up for debug",
+            "type": "process",
+            "command": "bash",
+            "args": [
+                "-c",
+                "set -e; if [ ! -f src/Makefile ] || grep -q '^CFLAGS =.*-D_DEBUG' src/Makefile; then if [ -f Makefile ]; then make distclean; fi; ./autogen.sh; ./configure; fi; make -j$(nproc)"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
             },
-            "osx": {
-                "command": "sh",
-                "args": [
-                    "-c",
-                    "echo 'This build task is supported only on Linux.' >&2; exit 1"
-                ]
-            },
+            "group": "build",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Debug Build",
+            "detail": "Unoptimised build (-O0 -ggdb -D_DEBUG); reconfigures first if the tree is set up for release",
+            "type": "process",
+            "command": "bash",
+            "args": [
+                "-c",
+                "set -e; if [ ! -f src/Makefile ] || ! grep -q '^CFLAGS =.*-D_DEBUG' src/Makefile; then if [ -f Makefile ]; then make distclean; fi; ./autogen.sh; ./configure --enable-debug; fi; make -j$(nproc)"
+            ],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -38,6 +47,20 @@
                 "isDefault": true
             },
             "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Open Config File",
+            "detail": "Open the b-em config that b-em actually uses (~/.config/b-em/b-em.cfg); close b-em before editing or it will overwrite your changes on exit",
+            "type": "process",
+            "command": "code",
+            "args": [
+                "--reuse-window",
+                "${env:HOME}/.config/b-em/b-em.cfg"
+            ],
+            "presentation": {
+                "reveal": "never"
+            },
+            "problemMatcher": []
         }
     ]
 }

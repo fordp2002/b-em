@@ -1022,6 +1022,7 @@ int nmi, oldnmi, interrupt, takeint;
  * 0x100: Music 2000 ACIA 1
  * 0x200: Music 2000 ACIA 2
  * 0x400: Music 2000 ACIA 3
+ * 0x800: Music 2000 ACIA 4
  */
 
 void m6502_reset(void)
