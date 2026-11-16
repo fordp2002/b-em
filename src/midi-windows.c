@@ -13,6 +13,7 @@ static HMIDIIN hMusic4000MidiIn;
 struct _midi_dev {
     const char *szName;
     HMIDIOUT hMidiOut;
+    bool output_active;
 };
 
 midi_dev_t Music2000Out[MIDI_NUM_OUTPUTS];
@@ -169,6 +170,37 @@ void midi_send_msg(midi_dev_t *dev, uint8_t *msg, size_t size) {
     MMRESULT res;
 
     log_debug("midi-windows: midi_send_msg(Music 2000 Out %d, %.*s, %d)", MidiOutNum(dev), (int)size, msg, (int)size);
-    if ((res = midiOutShortMsg(dev->hMidiOut, value)) != MMSYSERR_NOERROR)
+    if (dev->hMidiOut && (res = midiOutShortMsg(dev->hMidiOut, value)) == MMSYSERR_NOERROR)
+        dev->output_active = true;
+    else if (dev->hMidiOut)
         log_error("midi-windows: unable to send MIDI event on %s: %d", dev->szName, res);
+}
+
+static void midi_mute_outputs(bool active_only) {
+    uint8_t msg[3];
+
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
+        midi_dev_t *dev = &Music2000Out[i];
+
+        if (active_only && !dev->output_active)
+            continue;
+
+        for (int channel = 0; channel < 16; channel++) {
+            msg[0] = 0xb0 | channel;
+            msg[1] = 123;
+            msg[2] = 0;
+            midi_send_msg(dev, msg, sizeof msg);
+            msg[1] = 120;
+            midi_send_msg(dev, msg, sizeof msg);
+        }
+        dev->output_active = false;
+    }
+}
+
+void midi_panic(void) {
+    midi_mute_outputs(true);
+}
+
+void midi_mute_all(void) {
+    midi_mute_outputs(false);
 }

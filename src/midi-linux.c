@@ -537,7 +537,45 @@ void midi_save_config(void) {
 }
 
 void midi_send_msg(midi_dev_t *midi, uint8_t *buffer, size_t size) {
+#ifdef HAVE_JACK_JACK_H
+    if (midi->jack_enabled && midi->jack_port)
+        midi->output_active = true;
+#endif
+#ifdef HAVE_ALSA_ASOUNDLIB_H
+    if ((midi->alsa_seq_enabled && midi->alsa_seq_port) ||
+        (midi->alsa_raw_enabled && midi->alsa_raw_port))
+        midi->output_active = true;
+#endif
     midi_jack_send_msg(midi, buffer, size);
     midi_alsa_seq_send_msg(midi, buffer, size);
     midi_alsa_raw_send_msg(midi, buffer, size);
+}
+
+static void midi_mute_outputs(bool active_only) {
+    uint8_t msg[3];
+
+    for (int i = 0; i < MIDI_NUM_OUTPUTS; i++) {
+        midi_dev_t *midi = &midi_music2000_out[i];
+
+        if (active_only && !midi->output_active)
+            continue;
+
+        for (int channel = 0; channel < 16; channel++) {
+            msg[0] = 0xb0 | channel;
+            msg[1] = 123;
+            msg[2] = 0;
+            midi_send_msg(midi, msg, sizeof msg);
+            msg[1] = 120;
+            midi_send_msg(midi, msg, sizeof msg);
+        }
+        midi->output_active = false;
+    }
+}
+
+void midi_panic(void) {
+    midi_mute_outputs(true);
+}
+
+void midi_mute_all(void) {
+    midi_mute_outputs(false);
 }

@@ -516,6 +516,7 @@ static ALLEGRO_MENU *create_midi_menu(void)
         snprintf(title, sizeof title, "MiDI INTERFACE %d (&%04X)", i + 1, music2000_get_base(i));
         al_append_menu_item(menu, title, 0, 0, NULL, sub);
     }
+    al_append_menu_item(menu, "Mute all channels", IDM_MIDI_MUTE_ALL, 0, NULL, NULL);
     return menu;
 }
 
@@ -1460,6 +1461,9 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
             music2000_set_enabled(menu_get_num(event), !music2000_enabled(menu_get_num(event)));
             break;
 #ifdef HAVE_LINUX_MIDI
+        case IDM_MIDI_MUTE_ALL:
+            midi_mute_all();
+            break;
         case IDM_MIDI_M2000_INTERRUPT_NONE:
         case IDM_MIDI_M2000_INTERRUPT_IRQ:
         case IDM_MIDI_M2000_INTERRUPT_NMI: {

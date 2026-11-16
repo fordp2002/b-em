@@ -14,6 +14,7 @@
 #endif
 
 struct _midi_dev {
+    bool          output_active;
 #ifdef HAVE_JACK_JACK_H
     bool          jack_enabled;
     jack_port_t   *jack_port;

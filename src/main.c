@@ -592,6 +592,7 @@ void main_stop_fullspeed(bool hostshift)
 
 void main_key_break(void)
 {
+    midi_panic();
     m6502_reset();
     video_reset();
     i8271_reset();
